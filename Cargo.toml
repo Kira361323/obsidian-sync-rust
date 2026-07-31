@@ -1,0 +1,18 @@
+[package]
+name = "obsidian-sync"
+version = "4.0.0"
+edition = "2021"
+description = "Obsidian Git Sync — cross-platform vault synchronizer"
+license = "MIT"
+
+[dependencies]
+clap = { version = "4", features = ["derive"] }
+ureq = { version = "2", default-features = false, features = ["tls"] }
+chrono = "0.4"
+dirs = "5"
+
+[profile.release]
+strip = true
+lto = true
+codegen-units = 1
+opt-level = "z"
