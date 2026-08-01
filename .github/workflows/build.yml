@@ -11,7 +11,7 @@ on:
           - test
           - release
       tag:
-        description: "Тег релиза (только для release, напр. v4.2.0)"
+        description: "Тег релиза (только для release, напр. v4.3.0)"
         required: false
         type: string
 
@@ -19,6 +19,9 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
+  # ===========================================================================
+  # JOB 1: Тестовая сборка — артефакты для проверки
+  # ===========================================================================
   test-build:
     if: ${{ github.event.inputs.action == 'test' }}
     runs-on: ${{ matrix.os }}
@@ -46,33 +49,43 @@ jobs:
             artifact: obsidian-sync-windows-x86_64.exe
             use_cross: true
             features: "--features self-update"
+
     steps:
       - uses: actions/checkout@v4
+
       - uses: dtolnay/rust-toolchain@stable
         with:
           targets: ${{ matrix.target }}
+
       - name: Install cross
         if: matrix.use_cross
         run: cargo install cross --git https://github.com/cross-rs/cross
+
       - name: Build (native)
         if: ${{ !matrix.use_cross }}
         run: cargo build --release --target ${{ matrix.target }} ${{ matrix.features }}
+
       - name: Build (cross)
         if: matrix.use_cross
         run: cross build --release --target ${{ matrix.target }} ${{ matrix.features }}
+
       - name: Prepare artifact
         shell: bash
         run: |
           BIN="target/${{ matrix.target }}/release/obsidian-sync"
           [[ "${{ matrix.target }}" == *"windows"* ]] && BIN="${BIN}.exe"
           cp "$BIN" "${{ matrix.artifact }}"
+
       - uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.artifact }}
           path: ${{ matrix.artifact }}
           retention-days: 14
 
-    release:
+  # ===========================================================================
+  # JOB 2: Релиз — создаёт GitHub Release с архивами
+  # ===========================================================================
+  release:
     if: ${{ github.event.inputs.action == 'release' }}
     runs-on: ${{ matrix.os }}
     permissions:
@@ -105,20 +118,26 @@ jobs:
             ext: zip
             use_cross: true
             features: "--features self-update"
+
     steps:
       - uses: actions/checkout@v4
+
       - uses: dtolnay/rust-toolchain@stable
         with:
           targets: ${{ matrix.target }}
+
       - name: Install cross
         if: matrix.use_cross
         run: cargo install cross --git https://github.com/cross-rs/cross
+
       - name: Build (native)
         if: ${{ !matrix.use_cross }}
         run: cargo build --release --target ${{ matrix.target }} ${{ matrix.features }}
+
       - name: Build (cross)
         if: matrix.use_cross
         run: cross build --release --target ${{ matrix.target }} ${{ matrix.features }}
+
       - name: Package archive
         shell: bash
         run: |
@@ -134,6 +153,7 @@ jobs:
             tar -C "$STAGE" -czf "$ARCHIVE" "${{ matrix.bin }}"
           fi
           echo "ARCHIVE=$ARCHIVE" >> "$GITHUB_ENV"
+
       - name: Upload to release
         uses: softprops/action-gh-release@v2
         with:
