@@ -39,7 +39,6 @@ impl<'a> Git<'a> {
     }
 
     fn run_timeout(&self, args: &[&str], secs: u64) -> Result<String, String> {
-        // На Unix используем timeout, на Windows — spawn + wait
         #[cfg(unix)]
         {
             let mut cmd = Command::new("timeout");
@@ -71,7 +70,6 @@ impl<'a> Git<'a> {
 
         #[cfg(not(unix))]
         {
-            // Windows: без timeout-утилиты, просто spawn
             let out = self
                 .base_cmd()
                 .args(args)
@@ -281,7 +279,7 @@ impl<'a> Git<'a> {
             .output()
             .ok()
             .filter(|o| o.status.success())
-            .map(|o| String::from_utf8_lossy(&o.stdout).to_owned())
+            .map(|o| String::from_utf8_lossy(&o.stdout).into_owned())
             .unwrap_or_default();
 
         if vals.lines().any(|l| l.trim() == "*") {
