@@ -1,5 +1,4 @@
 use std::fs;
-use std::path::Path;
 
 pub struct Lock {
     dir: std::path::PathBuf,
