@@ -17,7 +17,6 @@ use cli::Cli;
 use lock::Lock;
 use logger::Logger;
 use sync::SyncContext;
-use ui::badge::SyncStatus;
 use ui::theme::Theme;
 use ui::Ui;
 
