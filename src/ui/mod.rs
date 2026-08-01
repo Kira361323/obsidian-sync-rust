@@ -127,6 +127,13 @@ impl Ui {
     }
 }
 
+/// Обёртка: cap 78 (как в bash-оригинале), fallback 78 при нулевой ширине.
+fn detect_width() -> usize {
+    let raw = detect_width_raw();
+    if raw == 0 { 78 } else { raw.min(78) }
+}
+
+/// Реальная ширина в колонках: $COLUMNS → `stty size` (unix, inherit tty) → 80.
 fn detect_width_raw() -> usize {
     if let Ok(c) = std::env::var("COLUMNS") {
         if let Ok(n) = c.parse::<usize>() {
