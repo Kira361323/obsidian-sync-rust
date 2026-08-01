@@ -232,37 +232,25 @@ fn run_sync_all(
 }
 
 fn print_status(repos: &[PathBuf], ui: &Ui) {
-    let t = &ui.theme;
-    for repo in repos {
-        let name = repo
-            .file_name()
-            .map(|n| n.to_string_lossy().to_string())
-            .unwrap_or_default();
-        let g = git::Git::new(repo);
-        let (ahead, behind) = g.ahead_behind();
-        let dirty = g
-            .status_porcelain()
-            .map(|s| !s.trim().is_empty())
-            .unwrap_or(false);
-        let branch = g.current_branch().unwrap_or_else(|| "?".to_owned());
-        ui.out(&format!(
-            " {}{name}{}  branch={}{}{}  ahead={}{}{}  behind={}{}{}  local={}{}{}",
-            t.bold(),
-            t.reset(),
-            t.cyan(),
-            branch,
-            t.reset(),
-            t.green(),
-            ahead,
-            t.reset(),
-            t.blue(),
-            behind,
-            t.reset(),
-            if dirty { t.yellow() } else { t.dim() },
-            if dirty { "dirty" } else { "clean" },
-            t.reset()
-        ));
-    }
+    let rows: Vec<ui::RepoStatus> = repos
+        .iter()
+        .map(|repo| {
+            let name = repo
+                .file_name()
+                .map(|n| n.to_string_lossy().to_string())
+                .unwrap_or_default();
+            let g = git::Git::new(repo);
+            let (ahead, behind) = g.ahead_behind();
+            let dirty = g
+                .status_porcelain()
+                .map(|s| !s.trim().is_empty())
+                .unwrap_or(false);
+            let branch = g.current_branch().unwrap_or_else(|| "?".to_owned());
+            ui::RepoStatus { name, branch, ahead, behind, dirty }
+        })
+        .collect();
+
+    ui.status_table(&rows);
 }
 
 fn list_conflicts_text(repos: &[PathBuf], ui: &Ui) {
