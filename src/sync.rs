@@ -54,21 +54,18 @@ pub fn sync_repo(
         ));
     }
 
-    // История
     let sync_info = build_sync_info(&git);
 
-    // Status
     let local_changes = match git.status_porcelain() {
         Ok(s) => s,
         Err(e) => {
-            drop(spinner);
+            spinner = None;
             let err = format!("{name}: git status: {e}");
             ctx.logger.log(&format!("ERROR: {err}"));
             return Err(err);
         }
     };
 
-    // Fetch
     let mut remote_ok = !ctx.offline;
     if !ctx.dry_run && !ctx.offline {
         if let Err(e) = git.fetch() {
@@ -80,9 +77,9 @@ pub fn sync_repo(
 
     let (ahead, behind) = git.ahead_behind();
 
-    // DRY-RUN
+    // ----------------------------------------------------------------- DRY-RUN
     if ctx.dry_run {
-        drop(spinner);
+        spinner = None;
         let (status, plan) = dry_run_plan(&local_changes, remote_ok, ahead, behind);
         let elapsed = start.elapsed().as_secs();
 
@@ -96,24 +93,21 @@ pub fn sync_repo(
             Some(&format!("Dry-run: {plan}")),
         );
 
-        return Ok(SyncResult {
-            status,
-            elapsed,
-        });
+        return Ok(SyncResult { status, elapsed });
     }
 
-    // COMMIT
+    // ----------------------------------------------------------------- COMMIT
     let mut did_commit = false;
     let mut status = SyncStatus::UpToDate;
 
     if !local_changes.trim().is_empty() {
         if let Err(e) = git.ensure_identity() {
-            drop(spinner);
+            spinner = None;
             return Err(format!("{name}: {e}"));
         }
 
         if let Err(e) = git.add_all() {
-            drop(spinner);
+            spinner = None;
             return Err(format!("{name}: git add: {e}"));
         }
 
@@ -129,10 +123,9 @@ pub fn sync_repo(
                 ctx.logger.log(&format!("Committed local changes in {name}"));
             }
             Err(_) => {
-                // Может быть нечего коммитить
                 let recheck = git.status_porcelain().unwrap_or_default();
                 if !recheck.trim().is_empty() {
-                    drop(spinner);
+                    spinner = None;
                     return Err(format!("{name}: git commit failed"));
                 }
             }
@@ -141,7 +134,7 @@ pub fn sync_repo(
 
     let (mut ahead, mut behind) = git.ahead_behind();
 
-    // INITIAL PUSH (нет upstream)
+    // --------------------------------------------------------- INITIAL PUSH
     let mut did_push = false;
     if remote_ok && !git.has_upstream() {
         if let (Some(remote), Some(branch)) = (git.first_remote(), git.current_branch()) {
@@ -155,13 +148,14 @@ pub fn sync_repo(
                     Ok(_) => {
                         did_push = true;
                         status = SyncStatus::Pushed;
-                        ctx.logger.log(&format!("Pushed new branch to {remote} in {name}"));
+                        ctx.logger
+                            .log(&format!("Pushed new branch to {remote} in {name}"));
                         let (a, b) = git.ahead_behind();
                         ahead = a;
                         behind = b;
                     }
                     Err(e) => {
-                        drop(spinner);
+                        spinner = None;
                         return Err(format!("{name}: Push ➔ {e}"));
                     }
                 }
@@ -169,14 +163,14 @@ pub fn sync_repo(
         }
     }
 
-    // PULL
+    // ----------------------------------------------------------------- PULL
     let mut did_pull = false;
     let mut had_conflict = false;
 
     if behind > 0 && remote_ok {
         if ahead > 0 {
             if let Err(e) = git.ensure_identity() {
-                drop(spinner);
+                spinner = None;
                 return Err(format!("{name}: {e}"));
             }
         }
@@ -190,7 +184,7 @@ pub fn sync_repo(
             Err(_) => {
                 let conflicted = git.conflicted_files();
                 if !conflicted.is_empty() {
-                    drop(spinner);
+                    spinner = None;
                     match resolve_keep_local(&git, repo, ctx) {
                         Ok(()) => {
                             had_conflict = true;
@@ -203,7 +197,6 @@ pub fn sync_repo(
                             return Err(format!("{name}: {e}"));
                         }
                     }
-                    // Перезапускаем спиннер если нужен
                     if !ctx.ui.silent && ctx.ui.use_color {
                         spinner = Some(Spinner::start(
                             &format!("Обработка {name}..."),
@@ -212,7 +205,7 @@ pub fn sync_repo(
                         ));
                     }
                 } else {
-                    drop(spinner);
+                    spinner = None;
                     return Err(format!("{name}: Pull failed"));
                 }
             }
@@ -220,12 +213,11 @@ pub fn sync_repo(
     }
 
     if did_pull || had_conflict {
-        let (a, b) = git.ahead_behind();
+        let (a, _) = git.ahead_behind();
         ahead = a;
-        behind = b;
     }
 
-    // PUSH
+    // ----------------------------------------------------------------- PUSH
     if ahead > 0 && remote_ok {
         match git.push() {
             Ok(_) => {
@@ -236,15 +228,15 @@ pub fn sync_repo(
                 ctx.logger.log(&format!("Pushed {ahead} commit(s) in {name}"));
             }
             Err(e) => {
-                drop(spinner);
+                spinner = None;
                 return Err(format!("{name}: Push ➔ {e}"));
             }
         }
     }
 
-    drop(spinner);
+    spinner = None;
 
-    // FINAL STATUS
+    // ----------------------------------------------------------------- FINAL
     if had_conflict {
         status = SyncStatus::Conflict;
     } else if did_pull && did_push {
@@ -333,7 +325,6 @@ fn resolve_keep_local(git: &Git, repo: &Path, ctx: &SyncContext) -> Result<(), S
         return Ok(());
     }
 
-    // Backup
     backup_conflicts(git, repo, ctx);
 
     for f in &conflicted {
@@ -346,7 +337,6 @@ fn resolve_keep_local(git: &Git, repo: &Path, ctx: &SyncContext) -> Result<(), S
         }
     }
 
-    // Проверяем что конфликтов не осталось
     if !git.conflicted_files().is_empty() {
         return Err("Не удалось разрешить конфликт до чистого индекса".to_owned());
     }
@@ -381,12 +371,12 @@ fn backup_conflicts(git: &Git, repo: &Path, ctx: &SyncContext) {
         }
     }
 
-    // Cleanup old (>30 days)
     cleanup_old_conflicts(&conflict_dir);
 }
 
 fn cleanup_old_conflicts(dir: &Path) {
-    let cutoff = chrono::Local::now() - chrono::Duration::days(crate::config::CONFLICT_MAX_AGE_DAYS);
+    let cutoff =
+        chrono::Local::now() - chrono::Duration::days(crate::config::CONFLICT_MAX_AGE_DAYS);
 
     if let Ok(entries) = fs::read_dir(dir) {
         for entry in entries.flatten() {
