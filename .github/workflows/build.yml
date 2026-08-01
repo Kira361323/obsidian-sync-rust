@@ -71,6 +71,8 @@ jobs:
   release:
     if: ${{ github.event.inputs.action == 'release' }}
     runs-on: ${{ matrix.os }}
+    permissions:
+      contents: write
     strategy:
       fail-fast: false
       matrix:
