@@ -53,10 +53,10 @@ pub fn run(ui: &crate::ui::Ui) -> Result<(), String> {
 fn parse_owner_name(repo: &str) -> Result<(String, String), String> {
     let trimmed = repo.trim().trim_end_matches('/');
     let no_git = trimmed.strip_suffix(".git").unwrap_or(trimmed);
-    let no_scheme = no_scheme
+    let no_scheme = no_git
         .split_once("://")
         .map(|(_, r)| r)
-        .unwrap_or(no_scheme);
+        .unwrap_or(no_git);
 
     let parts: Vec<&str> = no_scheme.split('/').filter(|p| !p.is_empty()).collect();
     if parts.len() < 2 {
