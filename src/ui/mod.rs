@@ -10,17 +10,20 @@ pub struct Ui {
     pub silent: bool,
     pub compact: bool,
     pub use_color: bool,
+    width: usize,
 }
 
 impl Ui {
     pub fn new(theme: Theme, silent: bool, compact: bool) -> Self {
         let use_color = atty_stdout() && std::env::var("NO_COLOR").is_err();
         let theme = if use_color { theme } else { Theme::None };
+        let width = detect_width();
         Self {
             theme,
             silent,
             compact,
             use_color,
+            width,
         }
     }
 
@@ -31,9 +34,8 @@ impl Ui {
     }
 
     pub fn sep(&self) -> String {
-        let w = term_width();
         let ch = if is_utf8_locale() { "─" } else { "-" };
-        ch.repeat(w)
+        ch.repeat(self.width)
     }
 
     pub fn header(&self, flags: &[&str]) {
@@ -69,12 +71,7 @@ impl Ui {
         note: Option<&str>,
     ) {
         let t = &self.theme;
-        let badge = format!(
-            "{}{}{}",
-            status.color(t),
-            status.badge(),
-            t.reset()
-        );
+        let badge = format!("{}{}{}", status.color(t), status.badge(), t.reset());
         let et = if elapsed > 0 {
             format!(" {}{}s{}", t.dim(), elapsed, t.reset())
         } else {
@@ -145,6 +142,43 @@ impl Ui {
     }
 }
 
+/// Реальная ширина терминала в колонках, cap 78 (как в bash-оригинале).
+/// Порядок: $COLUMNS → `stty size` (unix) → дефолт 80.
+fn detect_width() -> usize {
+    let raw = detect_width_raw();
+    if raw == 0 { 78 } else { raw.min(78) }
+}
+
+fn detect_width_raw() -> usize {
+    if let Ok(c) = std::env::var("COLUMNS") {
+        if let Ok(n) = c.parse::<usize>() {
+            if n > 0 {
+                return n;
+            }
+        }
+    }
+
+    #[cfg(unix)]
+    {
+        if let Ok(out) = std::process::Command::new("stty").arg("size").output() {
+            if out.status.success() {
+                let s = String::from_utf8_lossy(&out.stdout);
+                let mut it = s.trim().split_whitespace();
+                let _rows = it.next();
+                if let Some(cols) = it.next() {
+                    if let Ok(n) = cols.parse::<usize>() {
+                        if n > 0 {
+                            return n;
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    80
+}
+
 fn atty_stdout() -> bool {
     #[cfg(unix)]
     {
@@ -152,7 +186,6 @@ fn atty_stdout() -> bool {
     }
     #[cfg(not(unix))]
     {
-        // Windows: упрощённо, всегда true если не перенаправлено
         true
     }
 }
@@ -161,14 +194,6 @@ fn atty_stdout() -> bool {
 extern "C" {
     #[link_name = "isatty"]
     fn libc_isatty(fd: i32) -> i32;
-}
-
-fn term_width() -> usize {
-    std::env::var("COLUMNS")
-        .ok()
-        .and_then(|v| v.parse().ok())
-        .unwrap_or(60)
-        .min(78)
 }
 
 fn is_utf8_locale() -> bool {
