@@ -11,7 +11,7 @@ on:
           - test
           - release
       tag:
-        description: "Тег релиза (только для release, напр. v4.0.0)"
+        description: "Тег релиза (только для release, напр. v4.1.0)"
         required: false
         type: string
 
@@ -19,9 +19,6 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
-  # ===========================================================================
-  # JOB 1: Тестовая сборка — артефакты для проверки
-  # ===========================================================================
   test-build:
     if: ${{ github.event.inputs.action == 'test' }}
     runs-on: ${{ matrix.os }}
@@ -45,42 +42,32 @@ jobs:
             os: ubuntu-latest
             artifact: obsidian-sync-windows-x86_64.exe
             use_cross: true
-
     steps:
       - uses: actions/checkout@v4
-
       - uses: dtolnay/rust-toolchain@stable
         with:
           targets: ${{ matrix.target }}
-
       - name: Install cross
         if: matrix.use_cross
         run: cargo install cross --git https://github.com/cross-rs/cross
-
       - name: Build (native)
         if: ${{ !matrix.use_cross }}
         run: cargo build --release --target ${{ matrix.target }}
-
       - name: Build (cross)
         if: matrix.use_cross
         run: cross build --release --target ${{ matrix.target }}
-
       - name: Prepare artifact
         shell: bash
         run: |
           BIN="target/${{ matrix.target }}/release/obsidian-sync"
           [[ "${{ matrix.target }}" == *"windows"* ]] && BIN="${BIN}.exe"
           cp "$BIN" "${{ matrix.artifact }}"
-
       - uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.artifact }}
           path: ${{ matrix.artifact }}
           retention-days: 14
 
-  # ===========================================================================
-  # JOB 2: Релиз — создаёт GitHub Release с бинарниками
-  # ===========================================================================
   release:
     if: ${{ github.event.inputs.action == 'release' }}
     runs-on: ${{ matrix.os }}
@@ -90,53 +77,58 @@ jobs:
         include:
           - target: x86_64-unknown-linux-gnu
             os: ubuntu-latest
-            artifact: obsidian-sync-linux-x86_64
+            bin: obsidian-sync
+            ext: tar.gz
             use_cross: false
           - target: aarch64-unknown-linux-gnu
             os: ubuntu-latest
-            artifact: obsidian-sync-linux-aarch64
+            bin: obsidian-sync
+            ext: tar.gz
             use_cross: true
           - target: aarch64-linux-android
             os: ubuntu-latest
-            artifact: obsidian-sync-termux-aarch64
+            bin: obsidian-sync
+            ext: tar.gz
             use_cross: true
           - target: x86_64-pc-windows-gnu
             os: ubuntu-latest
-            artifact: obsidian-sync-windows-x86_64.exe
+            bin: obsidian-sync.exe
+            ext: zip
             use_cross: true
-
     steps:
       - uses: actions/checkout@v4
-
       - uses: dtolnay/rust-toolchain@stable
         with:
           targets: ${{ matrix.target }}
-
       - name: Install cross
         if: matrix.use_cross
         run: cargo install cross --git https://github.com/cross-rs/cross
-
       - name: Build (native)
         if: ${{ !matrix.use_cross }}
         run: cargo build --release --target ${{ matrix.target }}
-
       - name: Build (cross)
         if: matrix.use_cross
         run: cross build --release --target ${{ matrix.target }}
-
-      - name: Prepare binary
+      - name: Package archive
         shell: bash
         run: |
-          BIN="target/${{ matrix.target }}/release/obsidian-sync"
-          [[ "${{ matrix.target }}" == *"windows"* ]] && BIN="${BIN}.exe"
-          cp "$BIN" "${{ matrix.artifact }}"
-          chmod +x "${{ matrix.artifact }}" 2>/dev/null || true
-
-      - name: Create/Update Release
+          BIN="target/${{ matrix.target }}/release/${{ matrix.bin }}"
+          STAGE="pkg"
+          ARCHIVE="obsidian-sync-${{ matrix.target }}.${{ matrix.ext }}"
+          mkdir -p "$STAGE"
+          cp "$BIN" "$STAGE/"
+          chmod +x "$STAGE/${{ matrix.bin }}" 2>/dev/null || true
+          if [[ "${{ matrix.ext }}" == "zip" ]]; then
+            (cd "$STAGE" && zip -9 "../$ARCHIVE" "${{ matrix.bin }}")
+          else
+            tar -C "$STAGE" -czf "$ARCHIVE" "${{ matrix.bin }}"
+          fi
+          echo "ARCHIVE=$ARCHIVE" >> "$GITHUB_ENV"
+      - name: Upload to release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ github.event.inputs.tag }}
-          files: ${{ matrix.artifact }}
+          files: ${{ env.ARCHIVE }}
           generate_release_notes: true
           make_latest: true
         env:
