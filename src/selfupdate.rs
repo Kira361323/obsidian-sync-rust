@@ -1,4 +1,4 @@
-#[cfg(not(target_os = "android"))]
+#[cfg(feature = "self-update")]
 pub fn run(ui: &crate::ui::Ui) -> Result<(), String> {
     use self_update::backends::github::Update;
     let t = &ui.theme;
@@ -33,29 +33,30 @@ pub fn run(ui: &crate::ui::Ui) -> Result<(), String> {
     Ok(())
 }
 
-#[cfg(target_os = "android")]
+#[cfg(not(feature = "self-update"))]
 pub fn run(ui: &crate::ui::Ui) -> Result<(), String> {
     let t = &ui.theme;
     ui.out(&format!(
-        " {}На Termux/Android автообновление отключено.{}",
+        " {}Автообновление не вшито в эту сборку.{}",
         t.yellow(),
         t.reset()
     ));
     ui.out(&format!(
-        " {}Скачай архив из GitHub Releases и замени бинарник вручную.{}",
+        " {}Соберите с `cargo build --release --features self-update` или скачайте архив из GitHub Releases вручную.{}",
         t.dim(),
         t.reset()
     ));
-    Err("self-update недоступен на android".to_owned())
+    Err("self-update отключён в сборке".to_owned())
 }
 
-/// Извлекает (owner, name) из строки [package] repository.
-/// Принимает "https://github.com/OWNER/NAME", "github.com/OWNER/NAME",
-/// с trailing '/' или '.git' — берёт два последних сегмента пути.
+#[cfg(feature = "self-update")]
 fn parse_owner_name(repo: &str) -> Result<(String, String), String> {
     let trimmed = repo.trim().trim_end_matches('/');
     let no_git = trimmed.strip_suffix(".git").unwrap_or(trimmed);
-    let no_scheme = no_git.split_once("://").map(|(_, r)| r).unwrap_or(no_git);
+    let no_scheme = no_scheme
+        .split_once("://")
+        .map(|(_, r)| r)
+        .unwrap_or(no_scheme);
 
     let parts: Vec<&str> = no_scheme.split('/').filter(|p| !p.is_empty()).collect();
     if parts.len() < 2 {
