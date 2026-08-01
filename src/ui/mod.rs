@@ -3,14 +3,23 @@ pub mod spinner;
 pub mod theme;
 
 use badge::SyncStatus;
+use comfy_table::{ContentArrangement, Table};
 use theme::Theme;
+
+pub struct RepoStatus {
+    pub name: String,
+    pub branch: String,
+    pub ahead: u32,
+    pub behind: u32,
+    pub dirty: bool,
+}
 
 pub struct Ui {
     pub theme: Theme,
     pub silent: bool,
     pub compact: bool,
     pub use_color: bool,
-    width: usize,
+    pub width: usize,
 }
 
 impl Ui {
@@ -18,13 +27,7 @@ impl Ui {
         let use_color = atty_stdout() && std::env::var("NO_COLOR").is_err();
         let theme = if use_color { theme } else { Theme::None };
         let width = detect_width();
-        Self {
-            theme,
-            silent,
-            compact,
-            use_color,
-            width,
-        }
+        Self { theme, silent, compact, use_color, width }
     }
 
     pub fn out(&self, msg: &str) {
@@ -49,65 +52,60 @@ impl Ui {
         self.out("");
         self.out(&format!(
             " {}{}OBSIDIAN SYNC{}  {}{}{}{}",
-            t.bold(),
-            t.cyan(),
-            t.reset(),
-            t.dim(),
-            ts,
-            t.reset(),
-            suffix
+            t.bold(), t.cyan(), t.reset(), t.dim(), ts, t.reset(), suffix
         ));
         self.out(&self.sep());
     }
 
     pub fn repo_result(
-        &self,
-        idx: usize,
-        total: usize,
-        name: &str,
-        status: SyncStatus,
-        sync_info: &str,
-        elapsed: u64,
-        note: Option<&str>,
+        &self, idx: usize, total: usize, name: &str, status: SyncStatus,
+        sync_info: &str, elapsed: u64, note: Option<&str>,
     ) {
         let t = &self.theme;
         let badge = format!("{}{}{}", status.color(t), status.badge(), t.reset());
-        let et = if elapsed > 0 {
-            format!(" {}{}s{}", t.dim(), elapsed, t.reset())
-        } else {
-            String::new()
-        };
+        let et = if elapsed > 0 { format!(" {}{}s{}", t.dim(), elapsed, t.reset()) } else { String::new() };
 
         self.out(&format!(
             " {}[{}/{}]{} {}{}{} {}{}",
-            t.dim(),
-            idx,
-            total,
-            t.reset(),
-            t.bold(),
-            name,
-            t.reset(),
-            badge,
-            et
+            t.dim(), idx, total, t.reset(), t.bold(), name, t.reset(), badge, et
         ));
 
         if !self.compact {
             self.out(&format!("        {}{}{}", t.dim(), sync_info, t.reset()));
-            self.out(&format!(
-                "        {}↳ {}{}",
-                t.dim(),
-                status.description(),
-                t.reset()
-            ));
+            self.out(&format!("        {}↳ {}{}", t.dim(), status.description(), t.reset()));
         }
-
         if let Some(n) = note {
             self.out(&format!("        {}↳ {}{}", t.dim(), n, t.reset()));
         }
-
         if !self.compact {
             self.out("");
         }
+    }
+
+    pub fn status_table(&self, rows: &[RepoStatus]) {
+        if rows.is_empty() {
+            self.out(&format!(" {}Репозиториев нет{}", self.theme.dim(), self.theme.reset()));
+            return;
+        }
+
+        let mut table = Table::new();
+        table.set_content_arrangement(ContentArrangement::Dynamic);
+        table.set_table_width(self.width as u16);
+        table.set_header(["Репозиторий", "Ветка", "Ahead", "Behind", "Локально"]);
+
+        for r in rows {
+            table.add_row(vec![
+                r.name.as_str(),
+                r.branch.as_str(),
+                &r.ahead.to_string(),
+                &r.behind.to_string(),
+                if r.dirty { "dirty" } else { "clean" },
+            ]);
+        }
+
+        self.out("");
+        self.out(&table.to_string());
+        self.out("");
     }
 
     pub fn summary(&self, ok: usize, warn: usize, err: usize, duration: u64, errors: &[String]) {
@@ -115,22 +113,9 @@ impl Ui {
         self.out(&self.sep());
         self.out(&format!(
             " {}ИТОГ{}  {}OK:{}{}  {}WARN:{}{}  {}FAIL:{}{}  {}TIME:{}s{}",
-            t.bold(),
-            t.reset(),
-            t.green(),
-            ok,
-            t.reset(),
-            t.yellow(),
-            warn,
-            t.reset(),
-            t.red(),
-            err,
-            t.reset(),
-            t.dim(),
-            duration,
-            t.reset()
+            t.bold(), t.reset(), t.green(), ok, t.reset(), t.yellow(), warn, t.reset(),
+            t.red(), err, t.reset(), t.dim(), duration, t.reset()
         ));
-
         if !errors.is_empty() {
             self.out("");
             self.out(&format!(" {}{}Ошибки:{}", t.red(), t.bold(), t.reset()));
@@ -142,8 +127,6 @@ impl Ui {
     }
 }
 
-/// Реальная ширина терминала в колонках, cap 78 (как в bash-оригинале).
-/// Порядок: $COLUMNS → `stty size` (unix) → дефолт 80.
 fn detect_width() -> usize {
     let raw = detect_width_raw();
     if raw == 0 { 78 } else { raw.min(78) }
@@ -152,12 +135,9 @@ fn detect_width() -> usize {
 fn detect_width_raw() -> usize {
     if let Ok(c) = std::env::var("COLUMNS") {
         if let Ok(n) = c.parse::<usize>() {
-            if n > 0 {
-                return n;
-            }
+            if n > 0 { return n; }
         }
     }
-
     #[cfg(unix)]
     {
         if let Ok(out) = std::process::Command::new("stty").arg("size").output() {
@@ -167,27 +147,20 @@ fn detect_width_raw() -> usize {
                 let _rows = it.next();
                 if let Some(cols) = it.next() {
                     if let Ok(n) = cols.parse::<usize>() {
-                        if n > 0 {
-                            return n;
-                        }
+                        if n > 0 { return n; }
                     }
                 }
             }
         }
     }
-
     80
 }
 
 fn atty_stdout() -> bool {
     #[cfg(unix)]
-    {
-        unsafe { libc_isatty(1) != 0 }
-    }
+    { unsafe { libc_isatty(1) != 0 } }
     #[cfg(not(unix))]
-    {
-        true
-    }
+    { true }
 }
 
 #[cfg(unix)]
