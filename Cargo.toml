@@ -1,6 +1,6 @@
 [package]
 name = "obsidian-sync"
-version = "4.0.0"
+version = "4.1.0"
 edition = "2021"
 description = "Obsidian Git Sync — cross-platform vault synchronizer"
 license = "MIT"
@@ -10,6 +10,14 @@ clap = { version = "4", features = ["derive"] }
 ureq = { version = "2", default-features = false, features = ["tls"] }
 chrono = "0.4"
 dirs = "5"
+dialoguer = { version = "0.11", default-features = false }
+
+[target.'cfg(not(target_os = "android"))'.dependencies]
+self_update = { version = "0.41", default-features = false, features = [
+    "archive-tar",
+    "archive-zip",
+    "compression-flate2",
+] }
 
 [profile.release]
 strip = true
