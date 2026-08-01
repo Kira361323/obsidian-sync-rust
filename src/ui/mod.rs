@@ -90,7 +90,7 @@ impl Ui {
 
         let mut table = Table::new();
         table.set_content_arrangement(ContentArrangement::Dynamic);
-        table.set_table_width(self.width as u16);
+        table.set_width(self.width as u16);
         table.set_header(["Репозиторий", "Ветка", "Ahead", "Behind", "Локально"]);
 
         for r in rows {
