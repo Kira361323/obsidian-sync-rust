@@ -43,7 +43,7 @@ jobs:
             os: ubuntu-latest
             artifact: obsidian-sync-termux-aarch64
             use_cross: true
-            features: "--features self-update"
+            features: ""
           - target: x86_64-pc-windows-gnu
             os: ubuntu-latest
             artifact: obsidian-sync-windows-x86_64.exe
@@ -111,7 +111,7 @@ jobs:
             bin: obsidian-sync
             ext: tar.gz
             use_cross: true
-            features: "--features self-update"
+            features: ""
           - target: x86_64-pc-windows-gnu
             os: ubuntu-latest
             bin: obsidian-sync.exe
