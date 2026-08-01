@@ -1,6 +1,5 @@
 use std::path::Path;
 use std::process::Command;
-use std::time::Duration;
 
 use crate::config::{FETCH_TIMEOUT_SECS, GIT_OP_TIMEOUT_SECS};
 
@@ -235,22 +234,8 @@ impl<'a> Git<'a> {
             return Ok(());
         }
 
-        // Пробуем global
-        let gname = Command::new("git")
-            .args(["config", "--global", "user.name"])
-            .output()
-            .ok()
-            .filter(|o| o.status.success())
-            .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_owned())
-            .unwrap_or_default();
-
-        let gemail = Command::new("git")
-            .args(["config", "--global", "user.email"])
-            .output()
-            .ok()
-            .filter(|o| o.status.success())
-            .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_owned())
-            .unwrap_or_default();
+        let gname = read_global_config("user.name");
+        let gemail = read_global_config("user.email");
 
         if gname.is_empty() || gemail.is_empty() {
             return Err("Git identity not configured".to_owned());
@@ -339,5 +324,12 @@ impl<'a> Git<'a> {
         if !out.trim().is_empty() {
             let _ = self.run(&["rm", "-r", "--cached", "--quiet", "--", conflict_dir]);
         }
+    }
+}
+
+fn read_global_config(key: &str) -> String {
+    match Command::new("git").args(["config", "--global", key]).output() {
+        Ok(o) if o.status.success() => String::from_utf8_lossy(&o.stdout).trim().to_owned(),
+        _ => String::new(),
     }
 }
