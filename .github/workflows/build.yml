@@ -40,7 +40,7 @@ jobs:
             os: ubuntu-latest
             artifact: obsidian-sync-termux-aarch64
             use_cross: true
-            features: ""
+            features: "--features self-update"
           - target: x86_64-pc-windows-gnu
             os: ubuntu-latest
             artifact: obsidian-sync-windows-x86_64.exe
@@ -72,7 +72,7 @@ jobs:
           path: ${{ matrix.artifact }}
           retention-days: 14
 
-  release:
+    release:
     if: ${{ github.event.inputs.action == 'release' }}
     runs-on: ${{ matrix.os }}
     permissions:
@@ -98,7 +98,7 @@ jobs:
             bin: obsidian-sync
             ext: tar.gz
             use_cross: true
-            features: ""
+            features: "--features self-update"
           - target: x86_64-pc-windows-gnu
             os: ubuntu-latest
             bin: obsidian-sync.exe
