@@ -127,11 +127,6 @@ impl Ui {
     }
 }
 
-fn detect_width() -> usize {
-    let raw = detect_width_raw();
-    if raw == 0 { 78 } else { raw.min(78) }
-}
-
 fn detect_width_raw() -> usize {
     if let Ok(c) = std::env::var("COLUMNS") {
         if let Ok(n) = c.parse::<usize>() {
@@ -140,7 +135,12 @@ fn detect_width_raw() -> usize {
     }
     #[cfg(unix)]
     {
-        if let Ok(out) = std::process::Command::new("stty").arg("size").output() {
+        // inherit = tty родителя, иначе stty size не увидит размер терминала
+        if let Ok(out) = std::process::Command::new("stty")
+            .arg("size")
+            .stdin(std::process::Stdio::inherit())
+            .output()
+        {
             if out.status.success() {
                 let s = String::from_utf8_lossy(&out.stdout);
                 let mut it = s.trim().split_whitespace();
