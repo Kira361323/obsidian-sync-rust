@@ -163,18 +163,31 @@ fn run_watch(
         }
     };
     ui.out(&format!(
-        " {}Watch ON{} — интервал {}{}s{}, выход: Ctrl+C{}",
-        ui.theme.green(), ui.theme.reset(),
-        ui.theme.cyan(), secs, ui.theme.reset(),
-        ui.theme.dim(), ui.theme.reset()
+        " {}Watch ON{} — интервал {}{}s{}, {}выход: Ctrl+C{}",
+        ui.theme.green(),
+        ui.theme.reset(),
+        ui.theme.cyan(),
+        secs,
+        ui.theme.reset(),
+        ui.theme.dim(),
+        ui.theme.reset()
     ));
     logger.log(&format!("Watch started, interval={secs}s"));
 
     let mut iter = 0u64;
     loop {
         iter += 1;
-        ui.out(&format!(" {}── итерация {iter} ──{}", ui.theme.dim(), ui.theme.reset()));
-        let ctx = SyncContext { ui, logger, offline, dry_run };
+        ui.out(&format!(
+            " {}── итерация {iter} ──{}",
+            ui.theme.dim(),
+            ui.theme.reset()
+        ));
+        let ctx = SyncContext {
+            ui,
+            logger,
+            offline,
+            dry_run,
+        };
         for (i, repo) in repos.iter().enumerate() {
             let _ = sync::sync_repo(repo, i + 1, repos.len(), &ctx);
         }
@@ -221,17 +234,30 @@ fn run_sync_all(
 fn print_status(repos: &[PathBuf], ui: &Ui) {
     let t = &ui.theme;
     for repo in repos {
-        let name = repo.file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_default();
+        let name = repo
+            .file_name()
+            .map(|n| n.to_string_lossy().to_string())
+            .unwrap_or_default();
         let g = git::Git::new(repo);
         let (ahead, behind) = g.ahead_behind();
-        let dirty = g.status_porcelain().map(|s| !s.trim().is_empty()).unwrap_or(false);
+        let dirty = g
+            .status_porcelain()
+            .map(|s| !s.trim().is_empty())
+            .unwrap_or(false);
         let branch = g.current_branch().unwrap_or_else(|| "?".to_owned());
         ui.out(&format!(
-            " {}{name}{}  branch={}{}{}  ahead={}{}{}  behind={}{}{}  local={}{}",
-            t.bold(), t.reset(),
-            t.cyan(), branch, t.reset(),
-            t.green(), ahead, t.reset(),
-            t.blue(), behind, t.reset(),
+            " {}{name}{}  branch={}{}{}  ahead={}{}{}  behind={}{}{}  local={}{}{}",
+            t.bold(),
+            t.reset(),
+            t.cyan(),
+            branch,
+            t.reset(),
+            t.green(),
+            ahead,
+            t.reset(),
+            t.blue(),
+            behind,
+            t.reset(),
             if dirty { t.yellow() } else { t.dim() },
             if dirty { "dirty" } else { "clean" },
             t.reset()
