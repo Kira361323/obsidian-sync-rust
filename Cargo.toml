@@ -3,6 +3,7 @@ name = "obsidian-sync"
 version = "4.1.0"
 edition = "2021"
 description = "Obsidian Git Sync — cross-platform vault synchronizer"
+repository = "https://github.com/Kira361323/obsidian-sync-rust"
 license = "MIT"
 
 [dependencies]
