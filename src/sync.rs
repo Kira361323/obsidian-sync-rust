@@ -21,6 +21,15 @@ pub struct SyncContext<'a> {
     pub dry_run: bool,
 }
 
+/// Останавливает спиннер, если он крутится.
+/// `take()` читает и мувит значение из `Option` — это и есть то «чтение»
+/// переменной, которого требует линтер, плюс однократный Drop → stop.
+fn stop_spinner(spinner: &mut Option<Spinner>) {
+    if let Some(s) = spinner.take() {
+        drop(s);
+    }
+}
+
 pub fn sync_repo(
     repo: &Path,
     idx: usize,
@@ -45,21 +54,22 @@ pub fn sync_repo(
     git.ensure_conflict_dir_ignored(CONFLICT_DIR);
     git.untrack_conflict_dir(CONFLICT_DIR);
 
-    let mut spinner: Option<Spinner> = None;
-    if !ctx.ui.silent && ctx.ui.use_color {
-        spinner = Some(Spinner::start(
+    let mut spinner: Option<Spinner> = if !ctx.ui.silent && ctx.ui.use_color {
+        Some(Spinner::start(
             &format!("Обработка {name}..."),
             ctx.ui.theme.dim(),
             ctx.ui.theme.reset(),
-        ));
-    }
+        ))
+    } else {
+        None
+    };
 
     let sync_info = build_sync_info(&git);
 
     let local_changes = match git.status_porcelain() {
         Ok(s) => s,
         Err(e) => {
-            spinner = None;
+            stop_spinner(&mut spinner);
             let err = format!("{name}: git status: {e}");
             ctx.logger.log(&format!("ERROR: {err}"));
             return Err(err);
@@ -79,7 +89,7 @@ pub fn sync_repo(
 
     // ----------------------------------------------------------------- DRY-RUN
     if ctx.dry_run {
-        spinner = None;
+        stop_spinner(&mut spinner);
         let (status, plan) = dry_run_plan(&local_changes, remote_ok, ahead, behind);
         let elapsed = start.elapsed().as_secs();
 
@@ -102,12 +112,12 @@ pub fn sync_repo(
 
     if !local_changes.trim().is_empty() {
         if let Err(e) = git.ensure_identity() {
-            spinner = None;
+            stop_spinner(&mut spinner);
             return Err(format!("{name}: {e}"));
         }
 
         if let Err(e) = git.add_all() {
-            spinner = None;
+            stop_spinner(&mut spinner);
             return Err(format!("{name}: git add: {e}"));
         }
 
@@ -125,7 +135,7 @@ pub fn sync_repo(
             Err(_) => {
                 let recheck = git.status_porcelain().unwrap_or_default();
                 if !recheck.trim().is_empty() {
-                    spinner = None;
+                    stop_spinner(&mut spinner);
                     return Err(format!("{name}: git commit failed"));
                 }
             }
@@ -155,7 +165,7 @@ pub fn sync_repo(
                         behind = b;
                     }
                     Err(e) => {
-                        spinner = None;
+                        stop_spinner(&mut spinner);
                         return Err(format!("{name}: Push ➔ {e}"));
                     }
                 }
@@ -170,7 +180,7 @@ pub fn sync_repo(
     if behind > 0 && remote_ok {
         if ahead > 0 {
             if let Err(e) = git.ensure_identity() {
-                spinner = None;
+                stop_spinner(&mut spinner);
                 return Err(format!("{name}: {e}"));
             }
         }
@@ -184,7 +194,7 @@ pub fn sync_repo(
             Err(_) => {
                 let conflicted = git.conflicted_files();
                 if !conflicted.is_empty() {
-                    spinner = None;
+                    stop_spinner(&mut spinner);
                     match resolve_keep_local(&git, repo, ctx) {
                         Ok(()) => {
                             had_conflict = true;
@@ -205,7 +215,7 @@ pub fn sync_repo(
                         ));
                     }
                 } else {
-                    spinner = None;
+                    stop_spinner(&mut spinner);
                     return Err(format!("{name}: Pull failed"));
                 }
             }
@@ -228,13 +238,13 @@ pub fn sync_repo(
                 ctx.logger.log(&format!("Pushed {ahead} commit(s) in {name}"));
             }
             Err(e) => {
-                spinner = None;
+                stop_spinner(&mut spinner);
                 return Err(format!("{name}: Push ➔ {e}"));
             }
         }
     }
 
-    spinner = None;
+    stop_spinner(&mut spinner);
 
     // ----------------------------------------------------------------- FINAL
     if had_conflict {
