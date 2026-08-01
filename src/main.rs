@@ -53,7 +53,13 @@ fn main() {
     // Команды, не требующие root/сети/lock-логики sync.
     match &command {
         Some(Commands::Update) => {
-            let _ = selfupdate::run(&ui);
+            if let Err(e) = selfupdate::run(&ui) {
+                ui.out(&format!(
+                    "{}❌ Update: {e}{}",
+                    ui.theme.red(),
+                    ui.theme.reset()
+                ));
+            }
             return;
         }
         Some(Commands::GitCheck { upgrade }) => {
